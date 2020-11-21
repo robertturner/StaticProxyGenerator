@@ -16,7 +16,7 @@ Create proxy of interface:
 ```
 object interceptionHandler(MethodInfo method, object[] args, Type[] genericArguments)
 {
-    switch (method.name)
+    switch (method.Name)
     {
         case nameof(IMyIfce.AsyncMethod): 
             return Task.FromResult((string)args[0]);

@@ -19,7 +19,7 @@ namespace StaticProxyInterfaces
 			var text = interfaceType.FullName + "Implementation";
 			var type = interfaceType.GetTypeInfo().Assembly.GetType(text);
 			if (type == null)
-				throw new InvalidOperationException($"There is not auto-generated proxy for interface {interfaceType.FullName}. Ensure interface has [StaticProxyGenerate] attribute and that StaticProxyInterfaces is referenced as an Analyzer");
+				throw new InvalidOperationException($"There is no auto-generated proxy for interface {interfaceType.FullName}. Ensure interface has [StaticProxyGenerate] attribute and that StaticProxyInterfaces is referenced as an Analyzer");
 			return type;
 		}
 

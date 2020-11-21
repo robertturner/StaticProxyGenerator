@@ -23,12 +23,12 @@ namespace StaticProxyGenerator
             }
         }
 
-        public void Initialize(InitializationContext context)
+        public void Initialize(GeneratorInitializationContext context)
         {
             context.RegisterForSyntaxNotifications(() => new IfceSyntaxReceiver());
         }
 
-        public void Execute(SourceGeneratorContext context)
+        public void Execute(GeneratorExecutionContext context)
         {
             if (!(context.SyntaxReceiver is IfceSyntaxReceiver receiver))
                 return;
@@ -90,7 +90,7 @@ namespace {ns}
             }}
             var genericParameters = new System.Type[] {{ {genericParametersList} }};
             var args = new object[] {{ {parametersArray} }};
-            return ({method.ReturnType})interceptorHandler(methodInfos[{methodIndex}], args, genericParameters);
+            return ({method.ReturnType})interceptorHandler(this, methodInfos[{methodIndex}], args, genericParameters);
         }}
 ");
                         methodIndex++;
@@ -104,6 +104,5 @@ namespace {ns}
                 }
             }
         }
-
     }
 }

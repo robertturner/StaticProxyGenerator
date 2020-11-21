@@ -14,15 +14,15 @@ namespace TestGenerator
         {
 
 
-            static object handler(MethodInfo method, object[] args, Type[] genericArguments)
+            static object handler(object caller, MethodInfo method, object[] args, Type[] genericArguments)
             {
                 switch (method.Name)
                 {
-                    case "GetStr":
+                    case nameof(IAnIfceToProxy.GetStr):
                         return method.Name + " here goes! " + (string)args[0];
-                    case "Add5To":
+                    case nameof(IAnIfceToProxy.Add5To):
                         return (int)args[0] + 5;
-                    case "AGenMethod":
+                    case nameof(IAnIfceToProxy.AGenMethod):
                         return ((int)args[0] + 10).ToString();
                     case nameof(IAnIfceToProxy.StartServiceByName):
                         return Task.FromResult(ServiceStartResult.Val1);
