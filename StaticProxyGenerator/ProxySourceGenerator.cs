@@ -53,7 +53,7 @@ namespace {ns}
     ///
     /// Auto-generated implementation for {ifce.Identifier}
     ///
-    public class {className} : {ifce.Identifier}
+    public sealed class {className} : {ifce.Identifier}
     {{
         private readonly StaticProxyInterfaces.InterceptorHandler interceptorHandler;
         private static readonly System.Reflection.MethodInfo[] methodInfos = new System.Reflection.MethodInfo[{ifce.Members.Count}];
