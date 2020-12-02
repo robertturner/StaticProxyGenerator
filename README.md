@@ -14,7 +14,7 @@ public interface IMyIfce
 ```
 Create proxy of interface:
 ```
-object interceptionHandler(MethodInfo method, object[] args, Type[] genericArguments)
+object interceptionHandler(object instance, MethodInfo method, object[] args, Type[] genericArguments)
 {
     switch (method.Name)
     {
