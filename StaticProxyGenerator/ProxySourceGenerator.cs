@@ -23,6 +23,8 @@ namespace StaticProxyGenerator
             }
         }
 
+        public static bool ImplementMethodsBothExplicitAndClassPublic = false;
+
         public void Initialize(GeneratorInitializationContext context)
         {
             context.RegisterForSyntaxNotifications(() => new IfceSyntaxReceiver());
@@ -37,11 +39,31 @@ namespace StaticProxyGenerator
             {
                 if (ifce.AttributeLists.Where(a => a.ToString() == "[StaticProxyGenerate]").Any())
                 {
+                    var comp = context.Compilation;
+                    var assy = comp.Assembly;
+
                     var nsDecl = ifce.SyntaxTree.GetRoot().DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault();
                     if (nsDecl == null)
                         throw new ArgumentException("Missing namespace declaration");
                     var ns = nsDecl.Name;
                     var className = ifce.Identifier + "Implementation";
+
+                    var declType = assy.GetTypeByMetadataName($"{ns}.{ifce.Identifier}");
+                    var members = declType.GetMembers();
+                    var ifces = declType.AllInterfaces;
+                    var ifceMappingsIdxes = new Dictionary<string, int>(ifces.Length + 1);
+                    var allMembers = members.Concat(ifces.SelectMany(ifce => ifce.GetMembers()));
+                    var allMethods = allMembers.Where(m => m.Kind == SymbolKind.Method).Select(m => (IMethodSymbol)m).ToArray();
+                    var ifceMappingsList = new List<string>(ifceMappingsIdxes.Count);
+                    foreach (var m in allMethods)
+                    {
+                        if (!ifceMappingsIdxes.ContainsKey(m.ContainingType.ToString()))
+                        {
+                            ifceMappingsIdxes.Add(m.ContainingType.ToString(), ifceMappingsList.Count);
+                            ifceMappingsList.Add(m.ContainingType.ToString());
+                        }
+                    }
+                    var ifceMappingsText = string.Join(", ", ifceMappingsList.Select(ifceName => $"typeof({className}).GetInterfaceMap(typeof({ifceName}))"));
 
                     var implementationBuilder = new StringBuilder();
 
@@ -56,47 +78,74 @@ namespace {ns}
     public sealed class {className} : {ifce.Identifier}
     {{
         private readonly StaticProxyInterfaces.InterceptorHandler interceptorHandler;
-        private static readonly System.Reflection.MethodInfo[] methodInfos = new System.Reflection.MethodInfo[{ifce.Members.Count}];
-        private static readonly System.Reflection.InterfaceMapping ifceMapping = typeof({className}).GetInterfaceMap(typeof({ifce.Identifier}));
+        private static readonly System.Reflection.MethodInfo[] methodInfos = new System.Reflection.MethodInfo[{allMethods.Length}];
+        private static readonly System.Reflection.InterfaceMapping[] ifceMappings = new[] 
+        {{
+            {ifceMappingsText}
+        }};
         public {className}(StaticProxyInterfaces.InterceptorHandler interceptorHandler)
         {{
             if (interceptorHandler == null)
                 throw new System.ArgumentNullException(nameof(interceptorHandler));
             this.interceptorHandler = interceptorHandler;
         }}
-
 ");
                     uint methodIndex = 0;
-                    foreach (var member in ifce.Members)
+                    foreach (var m in allMethods)
                     {
-                        var method = (MethodDeclarationSyntax)member;
-                        var genericTypesDef = method.DescendantNodes().OfType<TypeParameterListSyntax>().FirstOrDefault();
-                        var genericDef = (genericTypesDef != null) ? genericTypesDef.ToFullString() : "";
-                        var genericConstraint = method.DescendantNodes().OfType<TypeParameterConstraintClauseSyntax>().FirstOrDefault();
-                        var genericConstraintText = (genericConstraint != null) ? genericConstraint.ToFullString() : "";
-                        var parametersDeclList = string.Join(", ", method.ParameterList.Parameters.Select(p => $"{p.Type} {p.Identifier}"));
-                        var genericParametersList = string.Join(", ", method.DescendantNodes().OfType<TypeParameterSyntax>().Select(t => $"typeof({t.Identifier})"));
-                        var parametersArray = string.Join(", ", method.ParameterList.Parameters.Select(p => p.Identifier));
+                        var genericDef = m.IsGenericMethod ? $"<{string.Join(", ", m.TypeParameters.Select(t => t.Name.ToString()))}>" : "";
+                        var genericConstraintText = m.IsGenericMethod ? string.Join(" ", m.TypeParameters.Select(t =>
+                        {
+                            string ret = null;
+                            void appendConstraint(string str) => ret = (ret == null) ? str : (ret + ", " + str);
+                            if (t.HasNotNullConstraint)
+                                appendConstraint("notnull");
+                            if (t.HasReferenceTypeConstraint)
+                                appendConstraint("class");
+                            if (t.HasValueTypeConstraint)
+                                appendConstraint("struct");
+                            if (t.HasUnmanagedTypeConstraint)
+                                appendConstraint("unmanaged");
+                            foreach (var typeConstraint in t.ConstraintTypes)
+                                appendConstraint(typeConstraint.Name);
+                            return (ret != null) ? $" where {t.Name} : {ret}" : "";
+                        })) : "";
+                        var genericParametersList = m.IsGenericMethod ? string.Join(", ", m.TypeParameters.Select(t => $"typeof({t.Name})")) : "";
+
+                        var parametersDeclList = string.Join(", ", m.Parameters.Select(p => $"{p.Type} {p.Name}"));
+                        var parametersArray = string.Join(", ", m.Parameters.Select(p => p.Name.ToString()));
+
+                        var returnLine = m.ReturnsVoid ? "" : $"return ({m.ReturnType})";
+                        var ifceReturn = m.ReturnsVoid ? "" : "return ";
+
+                        var methodSigProlog = ImplementMethodsBothExplicitAndClassPublic ? $"public {m.ReturnType} " : $"{m.ReturnType} {m.ContainingType}.";
+                        var primaryMethodGenericConstraints = ImplementMethodsBothExplicitAndClassPublic ? genericConstraintText : "";
 
                         implementationBuilder.Append($@"
         // MethodInfo index: {methodIndex}
-        public {method.ReturnType} {method.Identifier}{genericDef}({parametersDeclList}) {genericConstraintText}
+        {methodSigProlog}{m.Name}{genericDef}({parametersDeclList}) {primaryMethodGenericConstraints}
         {{
             if (methodInfos[{methodIndex}] == null)
             {{
                 var classMethod = (System.Reflection.MethodInfo)System.Reflection.MethodBase.GetCurrentMethod();
-                var index = System.Array.IndexOf(ifceMapping.TargetMethods, classMethod);
-                methodInfos[{methodIndex}] = ifceMapping.InterfaceMethods[index];
+                var index = System.Array.IndexOf(ifceMappings[{ifceMappingsIdxes[m.ContainingType.ToString()]}].TargetMethods, classMethod);
+                methodInfos[{methodIndex}] = ifceMappings[{ifceMappingsIdxes[m.ContainingType.ToString()]}].InterfaceMethods[index];
             }}
             var genericParameters = new System.Type[] {{ {genericParametersList} }};
             var args = new object[] {{ {parametersArray} }};
-            return ({method.ReturnType})interceptorHandler(this, methodInfos[{methodIndex}], args, genericParameters);
+            {returnLine}interceptorHandler(this, methodInfos[{methodIndex}], args, genericParameters);
+        }}
+");
+                        if (ImplementMethodsBothExplicitAndClassPublic)
+                            implementationBuilder.Append($@"
+        {m.ReturnType} {m.ContainingType}.{m.Name}{genericDef}({parametersDeclList})
+        {{
+            {ifceReturn}this.{m.Name}{genericDef}({parametersArray});
         }}
 ");
                         methodIndex++;
                     }
                     implementationBuilder.Append(@"
-
     }
 }
 ");
@@ -104,5 +153,6 @@ namespace {ns}
                 }
             }
         }
+
     }
 }
