@@ -16,15 +16,18 @@ namespace StaticProxyInterfaces
 				throw new ArgumentNullException(nameof(interfaceType));
 			if (!interfaceType.IsInterface)
 				throw new ArgumentException($"Type {interfaceType.FullName} is not an interface type!");
-			var text = interfaceType.FullName + "Implementation";
+            var genIdx = interfaceType.FullName.IndexOf("`");
+            var text = (genIdx >= 0) ? interfaceType.FullName.Insert(genIdx, "Implementation") : (interfaceType.FullName + "Implementation");
 			var type = interfaceType.GetTypeInfo().Assembly.GetType(text);
 			if (type == null)
-				throw new InvalidOperationException($"There is no auto-generated proxy for interface {interfaceType.FullName}. Ensure interface has [StaticProxyGenerate] attribute and that StaticProxyInterfaces is referenced as an Analyzer");
+				throw new InvalidOperationException($"There is not auto-generated proxy for interface {interfaceType.FullName}. Ensure interface has [StaticProxyGenerate] attribute and that StaticProxyInterfaces is referenced as an Analyzer");
 			return type;
 		}
 
 		static readonly ConcurrentDictionary<Type, Func<InterceptorHandler, object>> activatorCache = new ConcurrentDictionary<Type, Func<InterceptorHandler, object>>();
+        
         public static TInterface InstantiateProxy<TInterface>(InterceptorHandler interceptor) => (TInterface)InstantiateProxy(typeof(TInterface), interceptor);
+        
         public static object InstantiateProxy(Type interfaceType, InterceptorHandler interceptor)
         {
             if (interfaceType == null)

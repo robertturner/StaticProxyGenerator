@@ -18,8 +18,8 @@ namespace TestGenerator
         Val2
     }
 
-    [StaticProxyGenerate]
-    public interface IAnIfceToProxy : IBaseIfce, IDisposable
+    [StaticProxyGenerate(typeof(IDisposable), typeof(ICloneable))]
+    public interface IAnIfceToProxy : IBaseIfce
     {
 
         string GetStr(string source);
@@ -33,4 +33,25 @@ namespace TestGenerator
 
 
     }
+
+    [StaticProxyGenerate]
+    public interface IAGenIfceToProxy<T> : ICloneable where T : class, IDisposable
+    {
+
+        string GetStr(string source);
+
+        int Add5To(int startVal);
+
+        T RetT(int startVal);
+
+
+        string AGenMethod<T2>(int aVal) where T2 : notnull;
+        TStruct AGenMethod_TStruct<TStruct>(int aVal) where TStruct : struct;
+
+        Task<ServiceStartResult> StartServiceByName(string name, uint flags);
+
+
+    }
+
+
 }

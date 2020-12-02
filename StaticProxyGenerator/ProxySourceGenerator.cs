@@ -32,12 +32,12 @@ namespace StaticProxyGenerator
 
         public void Execute(GeneratorExecutionContext context)
         {
-            if (!(context.SyntaxReceiver is IfceSyntaxReceiver receiver))
+            if (context.SyntaxReceiver is not IfceSyntaxReceiver receiver)
                 return;
 
             foreach (InterfaceDeclarationSyntax ifce in receiver.CandidateFields)
             {
-                if (ifce.AttributeLists.Where(a => a.ToString() == "[StaticProxyGenerate]").Any())
+                if (ifce.AttributeLists.Where(a => a.ToString().StartsWith("[StaticProxyGenerate")).Any())
                 {
                     var comp = context.Compilation;
                     var assy = comp.Assembly;
@@ -48,25 +48,51 @@ namespace StaticProxyGenerator
                     var ns = nsDecl.Name;
                     var className = ifce.Identifier + "Implementation";
 
-                    var declType = assy.GetTypeByMetadataName($"{ns}.{ifce.Identifier}");
+                    int? numGenArgs = null;
+                    if (ifce.TypeParameterList != null)
+                        numGenArgs = ifce.TypeParameterList.Parameters.Count;
+
+                    var declType = numGenArgs.HasValue ? assy.GetTypeByMetadataName($"{ns}.{ifce.Identifier}`{numGenArgs}") : assy.GetTypeByMetadataName($"{ns}.{ifce.Identifier}");
                     var members = declType.GetMembers();
-                    var ifces = declType.AllInterfaces;
+
+                    var extraIfces = new List<INamedTypeSymbol>();
+                    var attrs = declType.GetAttributes();
+                    foreach (var attr in attrs)
+                    {
+                        var ctorArgs = attr.ConstructorArguments;
+                        foreach (var arg in ctorArgs)
+                        {
+                            var vals = arg.Values;
+                            foreach (var v in vals)
+                            {
+                                var b = v.Value;
+                                if (b is INamedTypeSymbol ifceType && ifceType.TypeKind == TypeKind.Interface)
+                                    extraIfces.Add(ifceType);
+                            }
+                        }
+                    }
+
+                    var ifces = declType.AllInterfaces.Concat(extraIfces).ToArray();
                     var ifceMappingsIdxes = new Dictionary<string, int>(ifces.Length + 1);
                     var allMembers = members.Concat(ifces.SelectMany(ifce => ifce.GetMembers()));
                     var allMethods = allMembers.Where(m => m.Kind == SymbolKind.Method).Select(m => (IMethodSymbol)m).ToArray();
                     var ifceMappingsList = new List<string>(ifceMappingsIdxes.Count);
                     foreach (var m in allMethods)
                     {
-                        if (!ifceMappingsIdxes.ContainsKey(m.ContainingType.ToString()))
+                        //var contTypeStr = m.ContainingType.IsGenericType ? m.ContainingType.ConstructUnboundGenericType().ToString() : m.ContainingType.ToString();
+                        var contTypeStr = m.ContainingType.ToString();
+                        if (!ifceMappingsIdxes.ContainsKey(contTypeStr))
                         {
-                            ifceMappingsIdxes.Add(m.ContainingType.ToString(), ifceMappingsList.Count);
-                            ifceMappingsList.Add(m.ContainingType.ToString());
+                            ifceMappingsIdxes.Add(contTypeStr, ifceMappingsList.Count);
+                            ifceMappingsList.Add(contTypeStr);
                         }
                     }
-                    var ifceMappingsText = string.Join(", ", ifceMappingsList.Select(ifceName => $"typeof({className}).GetInterfaceMap(typeof({ifceName}))"));
+                    var ifceMappingsText = string.Join(", ", ifceMappingsList.Select(ifceName => $"typeof({className}{ifce.TypeParameterList}).GetInterfaceMap(typeof({ifceName}))"));
+                    var extraIfcesDecl = string.Join(", ", extraIfces.Select(ifce => $"{ifce.ContainingNamespace}.{ifce.Name}"));
+                    if (!string.IsNullOrEmpty(extraIfcesDecl))
+                        extraIfcesDecl = ", " + extraIfcesDecl;
 
                     var implementationBuilder = new StringBuilder();
-
                     foreach (var node in ifce.SyntaxTree.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>())
                         implementationBuilder.AppendLine(node.ToString());
                     implementationBuilder.Append(@$"
@@ -75,7 +101,7 @@ namespace {ns}
     ///
     /// Auto-generated implementation for {ifce.Identifier}
     ///
-    public sealed class {className} : {ifce.Identifier}
+    public sealed class {className}{ifce.TypeParameterList}: {ifce.Identifier}{ifce.TypeParameterList}{extraIfcesDecl} {ifce.ConstraintClauses}
     {{
         private readonly StaticProxyInterfaces.InterceptorHandler interceptorHandler;
         private static readonly System.Reflection.MethodInfo[] methodInfos = new System.Reflection.MethodInfo[{allMethods.Length}];
@@ -117,6 +143,7 @@ namespace {ns}
 
                         var returnLine = m.ReturnsVoid ? "" : $"return ({m.ReturnType})";
                         var ifceReturn = m.ReturnsVoid ? "" : "return ";
+                        var ifceMappingIdx = ifceMappingsIdxes[m.ContainingType.ToString()];
 
                         var methodSigProlog = ImplementMethodsBothExplicitAndClassPublic ? $"public {m.ReturnType} " : $"{m.ReturnType} {m.ContainingType}.";
                         var primaryMethodGenericConstraints = ImplementMethodsBothExplicitAndClassPublic ? genericConstraintText : "";
@@ -128,8 +155,8 @@ namespace {ns}
             if (methodInfos[{methodIndex}] == null)
             {{
                 var classMethod = (System.Reflection.MethodInfo)System.Reflection.MethodBase.GetCurrentMethod();
-                var index = System.Array.IndexOf(ifceMappings[{ifceMappingsIdxes[m.ContainingType.ToString()]}].TargetMethods, classMethod);
-                methodInfos[{methodIndex}] = ifceMappings[{ifceMappingsIdxes[m.ContainingType.ToString()]}].InterfaceMethods[index];
+                var index = System.Array.IndexOf(ifceMappings[{ifceMappingIdx}].TargetMethods, classMethod);
+                methodInfos[{methodIndex}] = (index >= 0) ? ifceMappings[{ifceMappingIdx}].InterfaceMethods[index] : classMethod;
             }}
             var genericParameters = new System.Type[] {{ {genericParametersList} }};
             var args = new object[] {{ {parametersArray} }};

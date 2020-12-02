@@ -53,7 +53,10 @@ namespace TestGenerator
             Console.WriteLine($"Task method: {proxyIfce.StartServiceByName(null, 0).Result}");
             Console.WriteLine($"Task method: {proxyIfce.BaseMethod("hi")}");
 
-            proxyIfce.Dispose();
+            ((IDisposable)proxyIfce).Dispose();
+
+            var proxyGenIfce = ProxyGeneratorHelpers.InstantiateProxy<IAGenIfceToProxy<IDisposable>>(handler);
+            var genRes = proxyGenIfce.GetStr("GenArg");
 
         }
     }
