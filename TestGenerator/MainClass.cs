@@ -38,6 +38,8 @@ namespace TestGenerator
                         return args[0];
                     case nameof(IDisposable.Dispose):
                         break;
+                    case "MethodGenArg":
+                        return null;
                     default:
                         throw new MissingMethodException("Unrecognised method: " + method.Name);
                 }
@@ -56,7 +58,12 @@ namespace TestGenerator
             ((IDisposable)proxyIfce).Dispose();
 
             var proxyGenIfce = ProxyGeneratorHelpers.InstantiateProxy<IAGenIfceToProxy<IDisposable>>(handler);
-            var genRes = proxyGenIfce.GetStr("GenArg");
+            proxyGenIfce.MethodGenArg((IDisposable)null);
+            proxyGenIfce.Add5To(6);
+
+            var proxyGen2Ifce = ProxyGeneratorHelpers.InstantiateProxy<IAGenIfceToProxy<IDisposable, int>>(handler);
+            proxyGen2Ifce.RetT(5);
+            proxyGen2Ifce.RetT("bob");
 
         }
     }

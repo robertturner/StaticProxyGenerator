@@ -6,29 +6,11 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <!-- Generates a package at build -->
-    <IncludeBuildOutput>false</IncludeBuildOutput>
-    <!-- Do not include the generator as a lib dependency -->
-    <Authors>Robert Turner</Authors>
-    <AssemblyVersion>1.2.0.0</AssemblyVersion>
-    <FileVersion>1.2.0.0</FileVersion>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <!-- Package the generator in the analyzer directory of the nuget package -->
-    <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
-  </ItemGroup>
-
-  <PropertyGroup>
     <RestoreAdditionalProjectSources>https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet5/nuget/v3/index.json ;$(RestoreAdditionalProjectSources)</RestoreAdditionalProjectSources>
-    <Version>1.2.0</Version>
-    <PackageProjectUrl>https://github.com/robertturner/StaticProxyGenerator</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/robertturner/StaticProxyGenerator</RepositoryUrl>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="3.8.0" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.1" PrivateAssets="all" />  
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.1" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>
